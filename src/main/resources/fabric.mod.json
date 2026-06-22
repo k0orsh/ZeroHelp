@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "zerohelp",
+  "version": "${version}",
+  "name": "ZeroHelp",
+  "description": "Автоматический ответ на повторяющиеся вопросы в чате с двойной системой кулдаунов.",
+  "authors": [
+    "korsh"
+  ],
+  "contact": {
+    "sources": "https://github.com/korsh/zerohelp"
+  },
+  "license": "MIT",
+  "environment": "server",
+  "entrypoints": {
+    "main": [
+      "com.korsh.ZeroHelpMod"
+    ]
+  },
+  "mixins": [],
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "fabric-api": "*",
+    "minecraft": "~1.21.11",
+    "java": ">=21"
+  },
+  "suggests": {
+    "fabric-permissions-api": "*"
+  }
+}

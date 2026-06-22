@@ -1,0 +1,29 @@
+# Gradle
+.gradle/
+build/
+out/
+
+# IntelliJ IDEA
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# Eclipse
+*.classpath
+*.project
+.settings/
+eclipse/
+
+# VS Code
+.vscode/
+
+# macOS
+.DS_Store
+
+# Loom cache
+.loom-cache/
+remappedSrc/
+
+# Run configs (IntelliJ генерирует их автоматически)
+run/
