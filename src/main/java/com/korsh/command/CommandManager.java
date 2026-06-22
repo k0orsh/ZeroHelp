@@ -4,8 +4,6 @@ import com.korsh.ZeroHelpMod;
 import com.korsh.config.ConfigManager;
 import com.korsh.cooldown.CooldownManager;
 import com.mojang.brigadier.CommandDispatcher;
-import net.minecraft.command.CommandRegistryAccess;
-import net.minecraft.server.command.CommandManager.RegistrationEnvironment;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.text.Text;
 
@@ -13,7 +11,6 @@ import static net.minecraft.server.command.CommandManager.literal;
 
 /**
  * Регистрирует /zerohelp reload.
- * Доступна игрокам с уровнем опки ≥ 2 или с пермишеном zerohelp.admin (через Fabric Permissions API).
  */
 public class CommandManager {
 
@@ -22,14 +19,12 @@ public class CommandManager {
                                 CooldownManager cooldownManager) {
         dispatcher.register(
                 literal("zerohelp")
-                        .requires(src -> src.hasPermissionLevel(2) || hasAdminPermission(src))
+                        .requires(src -> checkPermission(src, 2))
                         .then(literal("reload")
                                 .executes(ctx -> {
                                     ServerCommandSource src = ctx.getSource();
                                     try {
-                                        // Перезагружаем конфиг (не сбрасываем кулдауны!)
                                         configManager.load();
-                                        // Чистим протухшие кулдауны — хорошая практика при reload
                                         cooldownManager.evictExpired();
 
                                         src.sendFeedback(() ->
@@ -45,7 +40,46 @@ public class CommandManager {
         );
     }
 
-    /** Мягкая проверка через Fabric Permissions API (если установлен). */
+    /**
+     * Универсальный метод проверки прав, устойчивый к изменениям названий методов в маппингах.
+     */
+    private static boolean checkPermission(ServerCommandSource src, int level) {
+        if (hasAdminPermission(src)) {
+            return true;
+        }
+        
+        try {
+            // Если команда отправлена из консоли или командного блока, разрешаем её выполнение
+            java.lang.reflect.Method getEntityMethod = src.getClass().getMethod("getEntity");
+            Object entity = getEntityMethod.invoke(src);
+            if (entity == null) {
+                return true; 
+            }
+            
+            // Если это игрок, проверяем его OP статус через менеджер игроков
+            if (ZeroHelpMod.serverInstance != null) {
+                java.lang.reflect.Method getGameProfileMethod = entity.getClass().getMethod("getGameProfile");
+                Object profile = getGameProfileMethod.invoke(entity);
+                
+                Object playerManager = ZeroHelpMod.serverInstance.getPlayerManager();
+                java.lang.reflect.Method isOperatorMethod = playerManager.getClass().getMethod("isOperator", profile.getClass());
+                return (boolean) isOperatorMethod.invoke(playerManager, profile);
+            }
+        } catch (Exception e) {
+            // Последний рубеж: если структуры сервера недоступны, пробуем вызвать методы маппингов через рефлексию
+            try {
+                java.lang.reflect.Method m = src.getClass().getMethod("hasPermissionLevel", int.class);
+                return (boolean) m.invoke(src, level);
+            } catch (Exception ignored) {
+                try {
+                    java.lang.reflect.Method m = src.getClass().getMethod("hasPermission", int.class);
+                    return (boolean) m.invoke(src, level);
+                } catch (Exception ignored2) {}
+            }
+        }
+        return false;
+    }
+
     private static boolean hasAdminPermission(ServerCommandSource src) {
         try {
             Class<?> perms = Class.forName("me.lucko.fabric.api.permissions.v0.Permissions");

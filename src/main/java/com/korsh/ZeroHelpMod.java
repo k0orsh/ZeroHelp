@@ -7,6 +7,8 @@ import com.korsh.cooldown.CooldownManager;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.message.v1.ServerMessageEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.minecraft.server.MinecraftServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,6 +30,9 @@ public class ZeroHelpMod implements ModInitializer {
 
     private static ConfigManager configManager;
     private static CooldownManager cooldownManager;
+    
+    // Глобальная ссылка на сервер для обхода проблем с маппингами игрока
+    public static MinecraftServer serverInstance;
 
     @Override
     public void onInitialize() {
@@ -37,6 +42,14 @@ public class ZeroHelpMod implements ModInitializer {
         configManager.load();
 
         cooldownManager = new CooldownManager();
+
+        // Регистрируем трекер сервера
+        ServerLifecycleEvents.SERVER_STARTING.register(server -> {
+            serverInstance = server;
+        });
+        ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
+            serverInstance = null;
+        });
 
         // Регистрируем слушатель чата
         ChatListener chatListener = new ChatListener(configManager, cooldownManager);
