@@ -4,9 +4,9 @@ import com.korsh.ZeroHelpMod;
 import com.korsh.config.ConfigManager;
 import com.korsh.config.ConfigManager.TriggerGroup;
 import com.korsh.cooldown.CooldownManager;
-import net.fabricmc.fabric.api.message.v1.ServerMessageEvents;
 import net.minecraft.network.message.SignedMessage;
 import net.minecraft.network.message.MessageType;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.text.TextCodecs;
@@ -24,6 +24,7 @@ import java.util.Locale;
 public class ChatListener {
 
     private static final MiniMessage MM = MiniMessage.miniMessage();
+    private static final String ZEROSTYLE_API_CLASS = "com.zerostyle.api.ZeroStyleBotApi";
 
     private final ConfigManager config;
     private final CooldownManager cooldown;
@@ -69,28 +70,50 @@ public class ChatListener {
             // Используем безопасный глобальный инстанс сервера
             var server = ZeroHelpMod.serverInstance;
             if (server == null) return;
-            
-            server.execute(() -> {
-                try {
-                    var component = MM.deserialize(fullMM);
-                    String json = GsonComponentSerializer.gson().serialize(component);
 
-                    JsonElement jsonElement = JsonParser.parseString(json);
-                    
-                    Text text = TextCodecs.CODEC.parse(JsonOps.INSTANCE, jsonElement)
-                            .result()
-                            .orElse(null);
-
-                    if (text != null) {
-                        server.getPlayerManager().broadcast(text, false);
-                    }
-                } catch (Exception e) {
-                    ZeroHelpMod.LOGGER.error("[ZeroHelp] Failed to send message", e);
-                }
-            });
+            server.execute(() -> sendResponse(server, fullMM));
 
         } catch (Exception e) {
             ZeroHelpMod.LOGGER.error("[ZeroHelp] Error in async chat processing", e);
+        }
+    }
+
+    private void sendResponse(MinecraftServer server, String fullMM) {
+        try {
+            // Если установлен ZeroStyle — шлём через его API, ответ будет выглядеть
+            // так же, как обычные сообщения глобального чата.
+            if (broadcastViaZeroStyle(server, fullMM)) return;
+
+            // Фолбэк: ZeroStyle не установлен — рассылаем напрямую ванильным способом.
+            var component = MM.deserialize(fullMM);
+            String json = GsonComponentSerializer.gson().serialize(component);
+
+            JsonElement jsonElement = JsonParser.parseString(json);
+
+            Text text = TextCodecs.CODEC.parse(JsonOps.INSTANCE, jsonElement)
+                    .result()
+                    .orElse(null);
+
+            if (text != null) {
+                server.getPlayerManager().broadcast(text, false);
+            }
+        } catch (Exception e) {
+            ZeroHelpMod.LOGGER.error("[ZeroHelp] Failed to send message", e);
+        }
+    }
+
+    /** Soft-dependency: вызывает ZeroStyleBotApi через reflection, если ZeroStyle загружен. */
+    private boolean broadcastViaZeroStyle(MinecraftServer server, String miniMessageText) {
+        try {
+            Class<?> api = Class.forName(ZEROSTYLE_API_CLASS);
+            var method = api.getMethod("broadcastBotMessage", MinecraftServer.class, String.class);
+            method.invoke(null, server, miniMessageText);
+            return true;
+        } catch (ClassNotFoundException ignored) {
+            return false; // ZeroStyle не установлен
+        } catch (Exception e) {
+            ZeroHelpMod.LOGGER.warn("[ZeroHelp] ZeroStyle integration failed: {}", e.getMessage());
+            return false;
         }
     }
 
